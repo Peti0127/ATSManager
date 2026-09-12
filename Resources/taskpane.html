@@ -427,6 +427,21 @@
               <span>Erlaubte Domain: <b id="domain">…</b></span
               ><span id="forward-error" class="error"></span>
             </div>
+
+            <label for="forward-copy" style="margin-top: 16px; line-height: 1.6">
+              <input
+                id="forward-copy"
+                type="checkbox"
+                checked
+                aria-describedby="forward-copy-help"
+              />
+              eine Kopie soll weitergeleitet werden
+            </label>
+
+            <p id="forward-copy-help" class="meta" style="line-height: 1.5">
+              Aktiviert: Die Nachricht bleibt im Posteingang. Deaktiviert: Die
+              Nachricht wird weitergeleitet und nach „Gelöschte Elemente“ verschoben.
+            </p>
           </div>
         </section>
         <section class="card">
@@ -14451,6 +14466,7 @@ ${i}`);
         fo: $("#forward-on"),
         ff: $("#forward-fields"),
         fa: $("#forward-address"),
+        forwardCopy: $("#forward-copy"),
         fe: $("#forward-error"),
         domain: $("#domain"),
         ro: $("#reply-on"),
@@ -14548,6 +14564,7 @@ ${i}`);
           forwarding: {
             enabled: !!r?.isEnabled,
             address: r?.actions?.forwardTo?.[0]?.emailAddress?.address || "",
+            keepCopy: !r?.actions?.delete,
             ruleId: r?.id,
           },
           replies: {
@@ -14571,6 +14588,8 @@ ${i}`);
           actions: s.forwarding.enabled
             ? {
                 forwardTo: [{ emailAddress: { address: s.forwarding.address } }],
+                // The rule still receives the message; delete moves it to Deleted Items.
+                delete: s.forwarding.keepCopy === false,
                 stopProcessingRules: false,
               }
             : {},
@@ -14578,7 +14597,10 @@ ${i}`);
         const fp = s.forwarding.ruleId
             ? graph(
                 `/me/mailFolders/inbox/messageRules/${encodeURIComponent(s.forwarding.ruleId)}`,
-                { method: "PATCH", body: JSON.stringify(f) },
+                {
+                  method: "PATCH",
+                  body: JSON.stringify(s.forwarding.enabled ? f : { isEnabled: false }),
+                },
               )
             : s.forwarding.enabled
               ? graph("/me/mailFolders/inbox/messageRules", {
@@ -14605,7 +14627,14 @@ ${i}`);
           a.scheduledEndDateTime = { dateTime: s.replies.end, timeZone: s.timeZone };
         }
         await Promise.all([
-          fp,
+          Promise.resolve(fp).then((rule) => {
+            // Retain new rule IDs, including when saving replies subsequently fails.
+            // Repeated saves must update this rule instead of creating duplicates.
+            if (rule?.id) {
+              s.forwarding.ruleId = rule.id;
+              state.forwarding.ruleId = rule.id;
+            }
+          }),
           graph("/me/mailboxSettings", {
             method: "PATCH",
             body: JSON.stringify({ automaticRepliesSetting: a }),
@@ -14627,6 +14656,7 @@ ${i}`);
         e.domain.textContent = "@" + domain(s.userEmail);
         e.fo.checked = s.forwarding.enabled;
         e.fa.value = s.forwarding.address || "";
+        e.forwardCopy.checked = s.forwarding.keepCopy !== false;
         e.ro.checked = s.replies.enabled;
         e.po.checked = s.replies.scheduled;
         e.start.value = (s.replies.start || "").slice(0, 16);
@@ -14723,6 +14753,7 @@ ${i}`);
           forwarding: {
             enabled: e.fo.checked,
             address: e.fa.value.trim().toLowerCase(),
+            keepCopy: e.forwardCopy.checked,
             ruleId: state.forwarding.ruleId,
           },
           replies: {
