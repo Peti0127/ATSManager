@@ -279,9 +279,15 @@
         max-height: 240px;
         overflow: auto;
         padding: 11px;
-        font-size: 14px;
         line-height: 1.5;
         outline: 0;
+      }
+
+      /* Keep both reply editors consistent, including pasted or loaded content. */
+      .editor,
+      .editor * {
+        font-family: Aptos, "Segoe UI", Arial, sans-serif !important;
+        font-size: 12pt !important;
       }
 
       .editor:empty:before {
@@ -14676,20 +14682,35 @@ ${i}`);
 
       function clean(x) {
         const c = x.cloneNode(true);
+        const replyFont = "font-family: Aptos, 'Segoe UI', Arial, sans-serif; font-size: 12pt;";
+
         c.querySelectorAll("script,style,iframe,object,embed,form,input,button").forEach(
           (n) => n.remove(),
         );
+
+        // Remove our previous container so repeated saves don't add nested wrappers.
+        c.querySelectorAll('[data-reply-font="aptos-12"]').forEach((node) => {
+          node.replaceWith(...node.childNodes);
+        });
+
         c.querySelectorAll("*").forEach((n) =>
           [...n.attributes].forEach((a) => {
             if (
               a.name.startsWith("on") ||
               a.name === "style" ||
+              a.name === "face" ||
+              a.name === "size" ||
               ((a.name === "href" || a.name === "src") && /^javascript:/i.test(a.value))
             )
               n.removeAttribute(a.name);
           }),
         );
-        return c.innerHTML.trim();
+
+        // Inline typography travels with the email; taskpane CSS does not.
+        // Set descendants too so headings and pasted font tags cannot override it.
+        c.querySelectorAll("*").forEach((node) => node.setAttribute("style", replyFont));
+
+        return `<div data-reply-font="aptos-12" style="${replyFont}">${c.innerHTML.trim()}</div>`;
       }
 
       function validate() {
