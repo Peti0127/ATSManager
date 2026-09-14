@@ -440,7 +440,8 @@
 
             <p id="forward-copy-help" class="meta" style="line-height: 1.5">
               Aktiviert: Die Nachricht bleibt im Posteingang. Deaktiviert: Die
-              Nachricht wird weitergeleitet und nach „Gelöschte Elemente“ verschoben.
+              Nachricht wird weitergeleitet, als gelesen markiert und nach
+              „Gelöschte Elemente“ verschoben.
             </p>
           </div>
         </section>
@@ -499,7 +500,7 @@
             <label class="switch-row nested"
               ><span
                 ><strong>Separate Nachricht für externe Personen</strong
-                ><small>Eigene Antwort außerhalb Ihrer Organisation senden.</small></span
+                ><small>Deaktiviert: Die Standardantwort gilt auch für externe Personen.</small></span
               ><span class="switch"
                 ><input id="external-on" type="checkbox" role="switch" /><span
                   class="track"
@@ -14573,7 +14574,13 @@ ${i}`);
             start: a.scheduledStartDateTime?.dateTime || "",
             end: a.scheduledEndDateTime?.dateTime || "",
             internalHtml: a.internalReplyMessage || "",
-            externalEnabled: a.externalAudience && a.externalAudience !== "none",
+            // Graph stores the audience and messages, but no separate-message switch.
+            // Matching messages represent the shared standard reply when reloading.
+            externalEnabled:
+              !!a.externalAudience &&
+              a.externalAudience !== "none" &&
+              (a.externalReplyMessage || "").trim() !==
+                (a.internalReplyMessage || "").trim(),
             externalHtml: a.externalReplyMessage || "",
           },
         };
@@ -14590,6 +14597,7 @@ ${i}`);
                 forwardTo: [{ emailAddress: { address: s.forwarding.address } }],
                 // The rule still receives the message; delete moves it to Deleted Items.
                 delete: s.forwarding.keepCopy === false,
+                markAsRead: s.forwarding.keepCopy === false,
                 stopProcessingRules: false,
               }
             : {},
@@ -14616,8 +14624,7 @@ ${i}`);
           a = {
             status,
             internalReplyMessage: s.replies.internalHtml,
-            externalAudience:
-              s.replies.enabled && s.replies.externalEnabled ? "all" : "none",
+            externalAudience: s.replies.enabled ? "all" : "none",
             externalReplyMessage: s.replies.externalEnabled
               ? s.replies.externalHtml
               : s.replies.internalHtml,
